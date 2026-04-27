@@ -484,6 +484,31 @@
     <!-- ========================================== -->
     <!-- KODE JAVASCRIPT: LOGIKA & TAMPILAN UTAMA   -->
     <!-- ========================================== -->
+    <script>     <!-- ========================================== -->
+    <!-- KODE JAVASCRIPT: LOGIKA & TAMPILAN UTAMA   -->
+    <!-- ========================================== -->
+    <script src="https://www.gstatic.com/firebaseapps/10.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebaseapps/10.7.0/firebase-database.js"></script>
+    
+    <script>
+        // ===== FIREBASE CONFIG - LETAKKAN DI SINI =====
+        const firebaseConfig = {
+            apiKey: "AIzaSyD0HCCf91UbLLMu33Y7vnsxZ8KCSn...",
+            authDomain: "e-safezone.firebaseapp.com",
+            databaseURL: "https://e-safezone-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "e-safezone",
+            storageBucket: "e-safezone.firebasestorage.app",
+            messagingSenderId: "991518277471",
+            appId: "1:991518277471:web:738921367..."
+        };
+
+        // Inisialisasi Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        
+        console.log('✅ Firebase Terhubung!');
+    </script>
+
     <script>
         // --- VARIABEL GLOBAL ---
         // ===== COPY KE DALAM <script> DI index.html - SEBELUM </body> =====
@@ -494,11 +519,87 @@
 const LocalDB = {
     saveAngket(data) {
         let angkets = JSON.parse(localStorage.getItem('safezone_angkets') || '[]');
-        angkets.push({...data, id: Date.now(), createdAt: new Date().toLocaleString()});
-        localStorage.setItem('safezone_angkets', JSON.stringify(angkets));
-        console.log('✅ Angket disimpan:', angkets.length, 'data');
+        ...
+        // --- VARIABEL GLOBAL ---
+        // ===== COPY KE DALAM <script> DI index.html - SEBELUM </body> =====
+
+// TAMBAHKAN INI DI AWAL <script> UTAMA (LINE ~487):
+
+// ===== STORAGE SYSTEM BARU =====
+const LocalDB = {
+    saveAngket(data) {
+        // Simpan ke Firebase
+        if(typeof database !== 'undefined') {
+            const ref = database.ref('angkets');
+            ref.push({
+                ...data,
+                id: Date.now(),
+                createdAt: new Date().toLocaleString(),
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            }).then(() => {
+                console.log('✅ Angket disimpan ke Firebase');
+            }).catch(err => {
+                console.error('❌ Error Firebase:', err);
+                // Jika Firebase error, simpan ke localStorage
+                let angkets = JSON.parse(localStorage.getItem('safezone_angkets') || '[]');
+                angkets.push({...data, id: Date.now(), createdAt: new Date().toLocaleString()});
+                localStorage.setItem('safezone_angkets', JSON.stringify(angkets));
+            });
+        } else {
+            // Backup: simpan ke localStorage jika Firebase belum siap
+            let angkets = JSON.parse(localStorage.getItem('safezone_angkets') || '[]');
+            angkets.push({...data, id: Date.now(), createdAt: new Date().toLocaleString()});
+            localStorage.setItem('safezone_angkets', JSON.stringify(angkets));
+        }
         return true;
     },
+    
+    getAngkets() {
+        return JSON.parse(localStorage.getItem('safezone_angkets') || '[]');
+    },
+    
+    saveActivity(data) {
+        // Simpan ke Firebase
+        if(typeof database !== 'undefined') {
+            const ref = database.ref('activities');
+            ref.push({
+                ...data,
+                id: Date.now(),
+                createdAt: new Date().toLocaleString(),
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            }).then(() => {
+                console.log('✅ Aktivitas disimpan ke Firebase');
+            }).catch(err => {
+                console.error('❌ Error Firebase:', err);
+                // Backup ke localStorage
+                let activities = JSON.parse(localStorage.getItem('safezone_activities') || '[]');
+                activities.push({...data, id: Date.now(), createdAt: new Date().toLocaleString()});
+                localStorage.setItem('safezone_activities', JSON.stringify(activities));
+            });
+        } else {
+            let activities = JSON.parse(localStorage.getItem('safezone_activities') || '[]');
+            activities.push({...data, id: Date.now(), createdAt: new Date().toLocaleString()});
+            localStorage.setItem('safezone_activities', JSON.stringify(activities));
+        }
+    },
+    
+    getActivities() {
+        return JSON.parse(localStorage.getItem('safezone_activities') || '[]');
+    },
+    
+    exportCSV() {
+        let angkets = this.getAngkets();
+        let csv = 'Waktu,Nama,Email,Kelas,Sekolah,Skor Total,Status,Dim1,Dim2,Dim3,Dim4\n';
+        angkets.forEach(a => {
+            csv += `"${a.createdAt}","${a.nama}","${a.email}","${a.kelas}","${a.sekolah}",${a.totalScore},"${a.status}",${a.dimensi1},${a.dimensi2},${a.dimensi3},${a.dimensi4}\n`;
+        });
+        let blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+        let link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "angket_" + Date.now() + ".csv";
+        link.click();
+    }
+};
     
     getAngkets() {
         return JSON.parse(localStorage.getItem('safezone_angkets') || '[]');
@@ -629,7 +730,76 @@ window.prosesAngket = function(event) {
 
 // TAMBAHKAN FUNGSI ADMIN PANEL
 window.loadAdminDataFromDB = function() {
-    let angkets = LocalDB.getAngkets();
+    let tbody = document.getElementById('admin-table-angket');
+    
+    if(!tbody) return;
+    
+    // Baca dari Firebase secara real-time
+    if(typeof database !== 'undefined') {
+        const ref = database.ref('angkets');
+        ref.on('value', (snapshot) => {
+            let angkets = [];
+            snapshot.forEach(child => {
+                angkets.push({...child.val(), firebaseId: child.key});
+            });
+            
+            tbody.innerHTML = '';
+            
+            if(angkets.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400">Belum ada data</td></tr>';
+                return;
+            }
+            
+            document.getElementById('admin-angket-count').textContent = angkets.length + ' Siswa';
+            
+            angkets.forEach((d, idx) => {
+                let row = tbody.insertRow();
+                let statusBg = d.status === 'Tinggi' ? 'bg-green-100 text-green-700' : d.status === 'Sedang' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
+                let lowestDim = d.dimensi1 < d.dimensi2 && d.dimensi1 < d.dimensi3 && d.dimensi1 < d.dimensi4 ? 'Pemahaman Diri' :
+                                d.dimensi2 < d.dimensi3 && d.dimensi2 < d.dimensi4 ? 'Penerimaan Diri' :
+                                d.dimensi3 < d.dimensi4 ? 'Harga Diri' : 'Diri Ideal';
+                
+                row.innerHTML = `
+                    <td class="p-3">${d.createdAt}</td>
+                    <td class="p-3 font-bold">${d.nama}</td>
+                    <td class="p-3">${d.kelas} / ${d.sekolah}</td>
+                    <td class="p-3 text-center"><strong>${d.totalScore}</strong></td>
+                    <td class="p-3 text-center"><span class="px-2 py-1 rounded-full ${statusBg}">${d.status}</span></td>
+                    <td class="p-3">${lowestDim}</td>
+                    <td class="p-3 text-center"><button class="text-blue-600 text-sm" onclick="alert('Skor:\\nDim1: ${d.dimensi1}\\nDim2: ${d.dimensi2}\\nDim3: ${d.dimensi3}\\nDim4: ${d.dimensi4}')">Lihat</button></td>
+                `;
+            });
+        }, (error) => {
+            console.error('Error membaca Firebase:', error);
+            // Fallback ke localStorage
+            let angkets = LocalDB.getAngkets();
+            tbody.innerHTML = '';
+            // ... render localStorage data
+        });
+    } else {
+        // Fallback jika Firebase belum siap
+        let angkets = LocalDB.getAngkets();
+        tbody.innerHTML = '';
+        if(angkets.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="p-4 text-center text-gray-400">Belum ada data</td></tr>';
+            return;
+        }
+        document.getElementById('admin-angket-count').textContent = angkets.length + ' Siswa';
+        angkets.forEach((d) => {
+            let row = tbody.insertRow();
+            let statusBg = d.status === 'Tinggi' ? 'bg-green-100 text-green-700' : d.status === 'Sedang' ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
+            row.innerHTML = `
+                <td class="p-3">${d.createdAt}</td>
+                <td class="p-3 font-bold">${d.nama}</td>
+                <td class="p-3">${d.kelas} / ${d.sekolah}</td>
+                <td class="p-3 text-center"><strong>${d.totalScore}</strong></td>
+                <td class="p-3 text-center"><span class="px-2 py-1 rounded-full ${statusBg}">${d.status}</span></td>
+                <td class="p-3">-</td>
+                <td class="p-3 text-center">-</td>
+            `;
+        });
+    }
+};
     let tbody = document.getElementById('admin-table-angket');
     
     if(!tbody) return;
