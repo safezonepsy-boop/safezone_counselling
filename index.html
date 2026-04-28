@@ -484,36 +484,90 @@
     <!-- ========================================== -->
     <!-- KODE JAVASCRIPT: LOGIKA & TAMPILAN UTAMA   -->
     <!-- ========================================== -->
-    <script>
+    <script type="module">
         // --- VARIABEL GLOBAL ---
         // ===== COPY KE DALAM <script> DI index.html - SEBELUM </body> =====
 
 // TAMBAHKAN INI DI AWAL <script> UTAMA (LINE ~487):
 
 // ===== STORAGE SYSTEM BARU =====
+// --- IMPORT FIREBASE ---
+import { initializeApp } from "https://gstatic.com";
+import { getDatabase, ref, push, onValue } from "https://gstatic.com";
+
+// --- PASTE FIREBASE CONFIG ANDA DI SINI ---
+const firebaseConfig = {
+  apiKey: "AIzaSyD0HCCf9lUbLLMu33Y7vnsxZ8KCSnkuruY",
+  authDomain: "://firebaseapp.com",
+  databaseURL: "https://firebasedatabase.app",
+  projectId: "e-safezone",
+  storageBucket: "e-safezone.firebasestorage.app",
+  messagingSenderId: "991518277471",
+  appId: "1:991518277471:web:07600aac4559c9e2ad00ea"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+// --- STORAGE SYSTEM BARU (FIREBASE) ---
 const LocalDB = {
-    saveAngket(data) {
-        let angkets = JSON.parse(localStorage.getItem('safezone_angkets') || '[]');
-        angkets.push({...data, id: Date.now(), createdAt: new Date().toLocaleString()});
-        localStorage.setItem('safezone_angkets', JSON.stringify(angkets));
-        console.log('✅ Angket disimpan:', angkets.length, 'data');
-        return true;
-    },
+  saveAngket(data) {
+    push(ref(db, 'safezone_angkets'), {
+      ...data,
+      createdAt: new Date().toLocaleString()
+    });
+    console.log('✅ Angket terkirim ke Cloud');
+    return true;
+  },
+
+  getAngkets(callback) {
+    onValue(ref(db, 'safezone_angkets'), (snapshot) => {
+      const data = snapshot.val();
+      const list = data ? Object.values(data) : [];
+      callback(list);
+    });
+  },
+
+  saveActivity(data) {
+    push(ref(db, 'safezone_activities'), {
+      ...data,
+      createdAt: new Date().toLocaleString()
+    });
+    console.log('✅ Aktivitas terkirim ke Cloud');
+  }
+};
     
-    getAngkets() {
-        return JSON.parse(localStorage.getItem('safezone_angkets') || '[]');
-    },
-    
-    saveActivity(data) {
-        let activities = JSON.parse(localStorage.getItem('safezone_activities') || '[]');
-        activities.push({...data, id: Date.now(), createdAt: new Date().toLocaleString()});
-        localStorage.setItem('safezone_activities', JSON.stringify(activities));
-        console.log('✅ Aktivitas disimpan');
-    },
-    
-    getActivities() {
-        return JSON.parse(localStorage.getItem('safezone_activities') || '[]');
-    },
+      // --- BAGIAN BARU UNTUK FIREBASE ---
+  
+  // Ambil data angket dari Cloud (Firebase)
+  getAngkets(callback) {
+    const dbRef = ref(db, 'safezone_angkets');
+    onValue(dbRef, (snapshot) => {
+      const data = snapshot.val();
+      const list = data ? Object.values(data) : [];
+      if (callback) callback(list);
+    });
+  },
+
+  // Simpan aktivitas ke Cloud
+  saveActivity(data) {
+    push(ref(db, 'safezone_activities'), {
+      ...data,
+      id: Date.now(),
+      createdAt: new Date().toLocaleString()
+    });
+    console.log('✅ Aktivitas disimpan di Cloud');
+  },
+
+  // Ambil data aktivitas dari Cloud
+  getActivities(callback) {
+    const dbRef = ref(db, 'safezone_activities');
+    onValue(dbRef, (snapshot) => {
+      const data = snapshot.val();
+      const list = data ? Object.values(data) : [];
+      if (callback) callback(list);
+    });
+  },
     
     exportCSV() {
         let angkets = this.getAngkets();
@@ -793,7 +847,7 @@ window.exportAngketToCSV = function() {
         window.bukaMateri = bukaMateri;
 
         // --- FUNGSI INTERAKSI MATERI ---
-        function interaksiSelesai(btn, pesan, customAlertMsg, activityName) {
+        window.interaksiSelesai = function (btn, pesan, customAlertMsg, activityName) {
             if (!btn) return;
             const wadah = btn.parentElement;
             if (!wadah) return;
@@ -837,11 +891,16 @@ window.exportAngketToCSV = function() {
             if(customAlertMsg) {
                 window.showModal('Info Analisis', customAlertMsg, '💡', false);
             } else {
-                window.showModal('Berhasil!', 'Kerja bagus Sahabat Safezone! Jawaban kamu sudah tersimpan di Safezone.', '🛡️', false);
-            }
-        }
-        window.interaksiSelesai = interaksiSelesai;
-
+                      window.showModal('Berhasil!', 'Kerja bagus...', '💙', false);
+      // Kirim data ke Cloud (Firebase)
+      LocalDB.saveActivity({
+          namaAktivitas: activityName || "Aktivitas Tanpa Nama",
+          jawabanSiswa: studentAnswer,
+          waktu: new Date().toLocaleString()
+      });
+    } // Ini penutup blok 'else'
+} // Ini penutup fungsi 'interaksiSelesai' 
+        
         function updateRansel(el) {
             if (!el) return;
             let grid = el.closest('.grid');
@@ -858,7 +917,7 @@ window.exportAngketToCSV = function() {
         }
         window.updateRansel = updateRansel;
 
-        function simpanHarapan(btn) {
+        window.simpanHarapan = function(btn) {
             const slider = document.getElementById('sliderHarapan');
             if (!slider) return;
             let val = parseInt(slider.value);
